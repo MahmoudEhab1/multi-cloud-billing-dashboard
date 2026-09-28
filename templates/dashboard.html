@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>☁ Billing Monitor</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁</text></svg>"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.1.9/Recharts.min.js"></script>
+  <script>window.React=React;window.ReactDOM=ReactDOM;</script>
+  <script>
+    (function(){
+      var t=localStorage.getItem('exa-billing-theme')||'light';
+      document.documentElement.setAttribute('data-theme',t);
+    })();
+  </script>
+  <style>
+    :root[data-theme="light"] {
+      --page-bg:#E8EDF2; --card-bg:#F4F7FA; --card-bg2:#ECEEF2;
+      --nav-bg:rgba(232,237,242,0.92); --border:rgba(0,0,0,0.07);
+      --text:#0F172A; --text2:#475569; --text3:#94A3B8;
+      --grid:rgba(0,0,0,0.04); --table-hover:rgba(0,0,0,0.02);
+      --table-border:rgba(0,0,0,0.04); --th-color:#64748B;
+      --shimmer1:rgba(0,0,0,0.03); --shimmer2:rgba(0,0,0,0.07);
+    }
+    :root[data-theme="dark"] {
+      --page-bg:#0B1117; --card-bg:#141D27; --card-bg2:#1A2533;
+      --nav-bg:rgba(11,17,23,0.92); --border:rgba(255,255,255,0.06);
+      --text:#F1F5F9; --text2:#94A3B8; --text3:#475569;
+      --grid:rgba(255,255,255,0.03); --table-hover:rgba(255,255,255,0.02);
+      --table-border:rgba(255,255,255,0.03); --th-color:#475569;
+      --shimmer1:rgba(255,255,255,0.03); --shimmer2:rgba(255,255,255,0.07);
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    html,body,#root { height:100%; }
+    body {
+      font-family:'DM Sans',sans-serif;
+      color:var(--text);
+      background:var(--page-bg);
+      overflow-x:hidden;
+      transition:background 0.5s ease, color 0.5s ease;
+    }
+    ::-webkit-scrollbar { width:4px; }
+    ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:4px; }
+
+    /* Progress bar at very top */
+    #progress-bar {
+      position:fixed; top:0; left:0; height:2px; z-index:999;
+      transition:width 0.1s linear, background 0.5s ease;
+    }
+
+    /* Slide transition */
+    .pview { transition:opacity 0.45s ease, transform 0.45s ease; }
+    .pview.out { opacity:0; transform:translateY(-12px); pointer-events:none; }
+    .pview.in  { opacity:0; transform:translateY(12px); }
+    .pview.on  { opacity:1; transform:translateY(0); }
+
+    /* Shimmer */
+    @keyframes shimmer {
+      0%   { background-position:-600px 0; }
+      100% { background-position:600px 0; }
+    }
+    .sk {
+      background:linear-gradient(90deg,var(--shimmer1) 25%,var(--shimmer2) 50%,var(--shimmer1) 75%);
+      background-size:600px 100%;
+      animation:shimmer 1.5s ease infinite;
+      border-radius:6px;
+    }
+
+    /* Live pulse */
+    @keyframes livepulse {
+      0%,100% { opacity:1; }
+      50%      { opacity:0.3; }
+    }
+    .livepulse { animation:livepulse 2s ease-in-out infinite; }
+
+    /* Fade up */
+    @keyframes fadeup {
+      from { opacity:0; transform:translateY(6px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .fadeup { animation:fadeup 0.35s ease forwards; }
+
+    /* Table */
+    .dtable { width:100%; border-collapse:collapse; }
+    .dtable th {
+      text-align:left; padding:9px 16px;
+      font-size:11px; letter-spacing:1.2px; text-transform:uppercase;
+      font-weight:500; font-family:'DM Mono',monospace;
+      color:#475569; border-bottom:1px solid rgba(255,255,255,0.05);
+    }
+    .dtable td { padding:14px 16px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:14px; }
+    .dtable tr:last-child td { border-bottom:none; }
+    .dtable tr:hover td { background:rgba(255,255,255,0.015); }
+
+    /* Card */
+    .card {
+      border-radius:12px;
+      padding:20px;
+      border:1px solid var(--border);
+      transition:background 0.5s ease, border-color 0.5s ease;
+    }
+
+    /* Badge */
+    .badge {
+      display:inline-block;
+      padding:3px 10px; border-radius:20px;
+      font-size:11px; font-weight:600; font-family:'DM Mono',monospace;
+      letter-spacing:0.3px;
+    }
+
+    /* Nav button */
+    .navbtn {
+      padding:6px 16px; border-radius:7px; border:none; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+      transition:all 0.2s;
+    }
+    .periodbtn {
+      padding:5px 13px; border-radius:6px; border:none; cursor:pointer;
+      font-family:'DM Mono',monospace; font-size:11px;
+      text-transform:uppercase; letter-spacing:0.8px;
+      transition:all 0.2s;
+    }
+  </style>
+</head>
+<body>
+<div id="progress-bar"></div>
+<div id="root"></div>
+
+<script>
+const {useState,useEffect,useCallback,useRef}=React;
+const {AreaChart,Area,BarChart,Bar,PieChart,Pie,Cell,
+       XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer}=window.Recharts;
+
+/* ── Config loaded from the provider database ── */
+const PROVIDER_ROWS={{ provider_rows|tojson }};
+const hexToRgba=(hex,alpha)=>{
+  const clean=(hex||"#3B82F6").replace("#","");
+  const value=parseInt(clean.length===3?clean.split("").map(c=>c+c).join(""):clean,16);
+  const r=(value>>16)&255,g=(value>>8)&255,b=value&255;
+  return `rgba(${r},${g},${b},${alpha})`;
+};
+const makeEndpoints=slug=>({
+  kpis:p=>`/api/provider/${slug}/kpis?period=${p}`,
+  services:p=>`/api/provider/${slug}/services?period=${p}`,
+  trend:()=>`/api/provider/${slug}/trend?months=7`,
+  daily:()=>`/api/provider/${slug}/daily?days=28`,
+  resources:()=>`/api/provider/${slug}/resources?limit=10`,
+  invoices:()=>`/api/provider/${slug}/invoices`,
+  enhanced:()=>`/api/provider/${slug}/enhanced_kpis`,
+});
+const PROVIDERS=Object.fromEntries(PROVIDER_ROWS.map(row=>[row.slug,{
+  ...row,id:row.slug,logo:row.logo||"☁",accent:row.accent||"#3B82F6",
+  accentSoft:hexToRgba(row.accent,0.12),accentBorder:hexToRgba(row.accent,0.28),
+  dark:null,card:null,navBg:null,ep:makeEndpoints(row.slug)
+}]));
+const ORDER=PROVIDER_ROWS.map(row=>row.slug);
+if(!ORDER.length){document.getElementById("root").innerHTML='<div style="padding:40px;font-family:sans-serif">No dashboards are enabled. Open <a href="/admin">Admin Panel</a> to enable one.</div>';}
+const ROTATE_MS=300000;
+const COLORS=["#E05A3A","#F59E0B","#34D399","#60A5FA","#A78BFA","#F472B6","#4ECDC4","#FBBF24","#FB923C","#A3E635"];
+
+/* ── Formatters ── */
+const fmt$=(n,cur="USD")=>{
+  if(n==null||n===undefined)return"—";
+  return new Intl.NumberFormat("en-US",{style:"currency",currency:cur||"USD",
+    maximumFractionDigits:n>=10000?0:n>=100?0:2}).format(n);
+};
+const fmtK=(n,cur)=>{
+  if(n==null)return"";
+  const sym=cur==="USD"?"USD ":"$";
+  if(n>=1000000)return`${sym}${(n/1000000).toFixed(1)}M`;
+  if(n>=1000)return`${sym}${(n/1000).toFixed(1)}k`;
+  return`${sym}${n.toFixed(0)}`;
+};
+const fmtRegion=r=>
+  r.replace("us-ashburn-1","🌎 Region A").replace("eu-frankfurt-1","🌎 Region B")
+   .replace("us-east-1","🇺🇸 US East").replace("us-east-2","🇺🇸 US East 2")
+   .replace("us-west-1","🇺🇸 US West").replace("us-west-2","🇺🇸 US West 2")
+   .replace("eu-west-1","🇪🇺 Ireland").replace("eu-central-1","🇩🇪 Frankfurt")
+   .replace("ap-southeast-1","🇸🇬 Singapore").replace("ap-northeast-1","🇯🇵 Tokyo")
+   .replace("global","🌐 Global").replace("NoRegion","🌐 Global");
+
+/* ── Shimmer ── */
+const Sk=({h=18,w="100%",mb=0})=>
+  React.createElement("div",{className:"sk",style:{height:h,width:w,marginBottom:mb}});
+
+/* ── Error ── */
+const Err=({msg})=>
+  React.createElement("div",{style:{
+    background:"rgba(248,113,113,0.06)",border:"1px solid rgba(248,113,113,0.18)",
+    borderRadius:8,padding:"10px 14px",fontSize:12,color:"#FCA5A5",
+    fontFamily:"'DM Mono',monospace",lineHeight:1.6
+  }},`⚠ ${msg}`);
+
+/* ── Tooltip style ── */
+const TT={
+  contentStyle:{background:"#1E293B",border:"1px solid rgba(255,255,255,0.08)",
+    borderRadius:8,fontFamily:"'DM Mono',monospace",fontSize:11,color:"#CBD5E1"},
+  itemStyle:{color:"#CBD5E1"},
+  labelStyle:{color:"#64748B",marginBottom:4}
+};
+
+/* ── KPI Card ── */
+const KpiCard=({label,value,sub,accent,card,loading})=>
+  React.createElement("div",{className:"card fadeup",style:{
+    background:"var(--card-bg)", flex:1, minWidth:150,
+    borderTop:`2px solid ${accent}`,
+  }},
+    loading
+      ?React.createElement("div",null,React.createElement(Sk,{h:11,w:"50%",mb:14}),React.createElement(Sk,{h:28,w:"70%"}))
+      :React.createElement("div",null,
+          React.createElement("div",{style:{
+            fontSize:11,color:"#475569",fontFamily:"'DM Mono',monospace",
+            letterSpacing:1.5,textTransform:"uppercase",marginBottom:10,fontWeight:500
+          }},label),
+          React.createElement("div",{style:{fontSize:26,fontWeight:700,color:"var(--text)",marginBottom:4,letterSpacing:"-0.5px"}},value||"—"),
+          React.createElement("div",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},sub)
+        )
+  );
+
+/* ── Section header ── */
+const SHdr=({title,sub})=>
+  React.createElement("div",{style:{marginBottom:16}},
+    React.createElement("div",{style:{fontSize:15,fontWeight:600,color:"var(--text)",letterSpacing:"-0.2px"}},title),
+    sub&&React.createElement("div",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace",marginTop:3}},sub)
+  );
+
+
+/* ── Combined Invoice Section (Primary Account tab only) ── */
+const CombinedInvoiceSection=({accent,accentSoft,accentBorder})=>{
+  const [invs,setInvs]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  const [expanded,setExpanded]=useState(null);
+
+  useEffect(()=>{
+    fetch("/api/oci/combined/invoices",{credentials:"same-origin"})
+      .then(r=>r.json())
+      .then(j=>{
+        if(j.ok) setInvs(j.data);
+        else setError(j.error);
+      })
+      .catch(e=>setError(e.message))
+      .finally(()=>setLoading(false));
+  },[]);
+
+  const TENANT_COLORS={primaryoci:"#C74634",clientalpha:"#7C3AED",clientbeta:"#059669",clientgamma:"#0284C7",clientdelta:"#EA580C"};
+  const TENANT_NAMES={primaryoci:"Primary Account",clientalpha:"Client Alpha",clientbeta:"Client Beta",clientgamma:"Client Gamma",clientdelta:"Client Delta"};
+
+  return React.createElement("div",{className:"card",style:{background:"var(--card-bg)",marginBottom:12}},
+    React.createElement(SHdr,{title:"🏢 Combined OCI Invoice",sub:"All tenants — full account invoice with per-tenant breakdown"}),
+    loading?React.createElement(Sk,{h:140}):
+    error?React.createElement(Err,{msg:error}):
+    React.createElement("div",null,
+      React.createElement("table",{className:"dtable"},
+        React.createElement("thead",null,
+          React.createElement("tr",null,
+            ["Billing Period","Invoice #","Total Amount","Amount Due","Due Date","Status",""].map(h=>
+              React.createElement("th",{key:h},h)
+            )
+          )
+        ),
+        React.createElement("tbody",null,
+          (invs||[]).map((v,i)=>{
+            const sc=v.status==="ACCUMULATING"?"#F59E0B":v.status==="PAID"?"#34D399":v.status==="PAST_DUE"?"#EF4444":"#F87171";
+            const sb=v.status==="ACCUMULATING"?"rgba(245,158,11,0.1)":v.status==="PAID"?"rgba(52,211,153,0.1)":v.status==="PAST_DUE"?"rgba(239,68,68,0.15)":"rgba(248,113,113,0.1)";
+            const isExp=expanded===v.id;
+            return React.createElement(React.Fragment,{key:i},
+              React.createElement("tr",{style:{cursor:"pointer"},onClick:()=>setExpanded(isExp?null:v.id)},
+                React.createElement("td",{style:{fontWeight:600,color:"var(--text)",fontSize:15}},
+                  React.createElement("span",{style:{marginRight:6,fontSize:11}},isExp?"▼":"▶"),
+                  v.time_start
+                ),
+                React.createElement("td",{style:{fontSize:12,color:"#334155",fontFamily:"'DM Mono',monospace"}},v.id),
+                React.createElement("td",{style:{fontFamily:"'DM Mono',monospace",fontWeight:500,fontSize:14}},fmt$(v.amount,v.currency)),
+                React.createElement("td",{style:{fontFamily:"'DM Mono',monospace",fontWeight:600,fontSize:14,
+                  color:v.amount_due>0?"#FCA5A5":"#6EE7B7"}},
+                  v.amount_due>0?fmt$(v.amount_due,v.currency):"—"
+                ),
+                React.createElement("td",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},v.time_invoice),
+                React.createElement("td",null,
+                  React.createElement("span",{className:"badge",style:{background:sb,border:`1px solid ${sc}40`,color:sc}},v.status)
+                ),
+                React.createElement("td",null,
+                  React.createElement("a",{
+                    href:`/api/oci/combined/invoices/${v.id}/download`,
+                    target:"_blank",
+                    onClick:e=>e.stopPropagation(),
+                    style:{display:"inline-flex",alignItems:"center",gap:5,
+                      background:accentSoft,border:`1px solid ${accentBorder}`,
+                      borderRadius:6,padding:"5px 12px",fontSize:12,color:accent,
+                      textDecoration:"none",fontFamily:"'DM Mono',monospace",fontWeight:500}
+                  },"⬇ PDF")
+                )
+              ),
+              isExp&&React.createElement("tr",{key:`exp-${i}`},
+                React.createElement("td",{colSpan:7,style:{padding:"12px 20px",background:"var(--card-bg2)"}},
+                  React.createElement("div",{style:{display:"flex",gap:16,flexWrap:"wrap"}},
+                    Object.entries(v.by_tenant||{}).map(([tk,td])=>
+                      React.createElement("div",{key:tk,style:{
+                        flex:"1",minWidth:180,
+                        border:`1px solid ${TENANT_COLORS[tk]}44`,
+                        borderRadius:8,padding:"10px 14px",
+                        background:`${TENANT_COLORS[tk]}08`
+                      }},
+                        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:TENANT_COLORS[tk],marginBottom:6}},
+                          TENANT_NAMES[tk]||tk
+                        ),
+                        React.createElement("div",{style:{fontSize:14,fontWeight:600,color:"var(--text)",marginBottom:8}},
+                          fmt$(td.total,v.currency)
+                        ),
+                        Object.entries(td.services||{}).sort((a,b)=>b[1]-a[1]).map(([svc,cost])=>
+                          React.createElement("div",{key:svc,style:{display:"flex",justifyContent:"space-between",
+                            fontSize:11,color:"var(--text2)",fontFamily:"'DM Mono',monospace",marginBottom:3}},
+                            React.createElement("span",null,svc.length>20?svc.slice(0,20)+"…":svc),
+                            React.createElement("span",null,fmt$(cost,v.currency))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            );
+          })
+        )
+      )
+    )
+  );
+};
+
+/* ── Provider Dashboard ── */
+const Dashboard=({provider,period})=>{
+  const P=PROVIDERS[provider];
+  const [d,setD]=useState({});
+  const [ld,setLd]=useState({});
+  const [er,setEr]=useState({});
+
+  const load=useCallback(async(key,url)=>{
+    setLd(l=>({...l,[key]:true}));
+    setEr(e=>({...e,[key]:null}));
+    try{
+      const r=await fetch(url,{credentials:"same-origin"});
+      if(r.status===401){window.location="/login";return;}
+      const j=await r.json();
+      if(!j.ok)throw new Error(j.error||"API error");
+      setD(prev=>({...prev,[key]:j.data}));
+    }catch(e){
+      setEr(prev=>({...prev,[key]:e.message}));
+    }finally{
+      setLd(l=>({...l,[key]:false}));
+    }
+  },[]);
+
+  useEffect(()=>{
+    const ep=P.ep;
+    load("kpis",      ep.kpis(period));
+    setTimeout(()=>load("services",  ep.services(period)), 600);
+    setTimeout(()=>load("trend",     ep.trend()),          1200);
+    setTimeout(()=>load("daily",     ep.daily()),          1800);
+    setTimeout(()=>load("resources", ep.resources()),      2400);
+    setTimeout(()=>load("invoices",  ep.invoices()),       3000);
+    if(ep.enhanced) setTimeout(()=>load("enhanced", ep.enhanced()), 500);
+  },[provider,period]);
+
+  const kpis=d.kpis||{};
+  const svcs=d.services||[];
+  const trend=d.trend||[];
+  const daily=d.daily||[];
+  const res=d.resources||[];
+  const inv=d.invoices||[];
+  const enh=d.enhanced||{};
+  const latestDailyCost=daily.length?daily[daily.length-1].cost:0;
+  const trendKeys=[...new Set(trend.flatMap(m=>Object.keys(m).filter(k=>k!=="month")))].slice(0,7);
+
+  return React.createElement("div",{style:{paddingBottom:48}},
+
+    /* ── External Portal Account Overview ── */
+    P.provider_type==="portal"&&React.createElement("div",{className:"card",style:{background:"var(--card-bg)",marginBottom:12}},
+      React.createElement(SHdr,{title:"🌐 External Portal Account Overview",sub:"All values included in the Telegram billing report"}),
+      er.enhanced?React.createElement(Err,{msg:er.enhanced}):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12}},
+        [
+          {label:"Latest Daily Spend",value:fmt$(latestDailyCost,enh.currency||P.currency),sub:"Estimated from current billing data",loading:ld.daily},
+          {label:"Month-to-Date",value:fmt$(enh.current_month,enh.currency||P.currency),sub:"Current month usage",loading:ld.enhanced},
+          {label:"Forecast",value:fmt$(enh.forecast,enh.currency||P.currency),sub:"Projected month end",loading:ld.enhanced},
+          {label:"Last Month",value:fmt$(enh.last_month,enh.currency||P.currency),sub:"Previous billing month",loading:ld.enhanced},
+          {label:"MoM Change",value:`${Number(enh.mom_pct||0)>=0?"+":""}${Number(enh.mom_pct||0).toFixed(1)}%`,sub:"Month-over-month",loading:ld.enhanced},
+          {label:"Balance",value:fmt$(enh.balance,enh.currency||P.currency),sub:"Current account balance",loading:ld.enhanced},
+          {label:"Account Credit",value:fmt$(enh.account_credit,enh.currency||P.currency),sub:enh.low_credit_alert?"⚠ Low credit alert":"Available account credit",loading:ld.enhanced},
+          {label:"Promo Credit",value:fmt$(enh.promotional_credit,enh.currency||P.currency),sub:"Available promotional credit",loading:ld.enhanced},
+        ].map((item,i)=>React.createElement(KpiCard,{key:i,...item,accent:P.accent,card:P.card}))
+      )
+    ),
+
+    /* ── Hetzner Invoice Overview ── */
+    P.provider_type==="hetzner"&&React.createElement("div",{className:"card",style:{background:"var(--card-bg)",marginBottom:12}},
+      React.createElement(SHdr,{title:"🔴 Hetzner Invoice Overview",sub:"Exact invoice data collected from the authenticated Hetzner Accounts session"}),
+      er.enhanced?React.createElement(Err,{msg:er.enhanced}):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}},
+        [
+          {label:"Latest Invoice",value:enh.latest_invoice_id||"—",sub:`${enh.invoice_count||0} invoice(s) collected`,loading:ld.enhanced},
+          {label:"Invoice Date",value:enh.latest_invoice_date||"—",sub:"Issue date",loading:ld.enhanced},
+          {label:"Invoice Amount",value:fmt$(enh.latest_invoice_amount,enh.currency||P.currency),sub:"Exact billed amount",loading:ld.enhanced},
+          {label:"Status",value:enh.latest_invoice_status||"UNKNOWN",sub:"Payment status",loading:ld.enhanced},
+          {label:"Last Collection",value:enh.collected_at||"—",sub:"Collector cache timestamp",loading:ld.enhanced},
+        ].map((item,i)=>React.createElement(KpiCard,{key:i,...item,accent:P.accent,card:P.card}))
+      )
+    ),
+
+    /* ── Invoices ── */
+    React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+      React.createElement(SHdr,{title:"🧾 Invoice Status",sub:"Billing periods and payment status"}),
+      ld.invoices?React.createElement(Sk,{h:140}):
+      er.invoices?React.createElement(Err,{msg:er.invoices}):
+      React.createElement("table",{className:"dtable"},
+        React.createElement("thead",null,
+          React.createElement("tr",null,
+            ["Billing Period","Invoice #","Issue Date","Amount","Amount Due","Due Date","Status",""].map(h=>
+              React.createElement("th",{key:h},h)
+            )
+          )
+        ),
+        React.createElement("tbody",null,
+          inv.map((v,i)=>{
+            const sc=v.status==="ACCUMULATING"?"#F59E0B":v.status==="PAID"?"#34D399":v.status==="PAST_DUE"?"#EF4444":"#F87171";
+            const sb=v.status==="ACCUMULATING"?"rgba(245,158,11,0.1)":v.status==="PAID"?"rgba(52,211,153,0.1)":v.status==="PAST_DUE"?"rgba(239,68,68,0.15)":"rgba(248,113,113,0.1)";
+            return React.createElement("tr",{key:i},
+              React.createElement("td",{style:{fontWeight:600,color:"var(--text)",fontSize:15}},v.time_start),
+              React.createElement("td",{style:{fontSize:12,color:"#334155",fontFamily:"'DM Mono',monospace"}},v.id),
+              React.createElement("td",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},v.issue_date||"—"),
+              React.createElement("td",{style:{fontFamily:"'DM Mono',monospace",fontWeight:500,fontSize:14}},fmt$(v.amount,v.currency)),
+              React.createElement("td",{style:{fontFamily:"'DM Mono',monospace",fontWeight:600,fontSize:14,
+                color:v.amount_due>0?"#FCA5A5":"#6EE7B7"}},
+                v.amount_due>0?fmt$(v.amount_due,v.currency):"—"
+              ),
+              React.createElement("td",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},v.time_invoice),
+              React.createElement("td",null,
+                React.createElement("span",{className:"badge",style:{background:sb,border:`1px solid ${sc}40`,color:sc}},v.status)
+              ),
+              React.createElement("td",null,
+                v.status!=="ACCUMULATING"&&v.id!=="ERR"
+                  ?React.createElement("a",{
+                      href:`/api/provider/${provider}/invoices/${v.id}/download`,target:"_blank",
+                      style:{display:"inline-flex",alignItems:"center",gap:5,
+                        background:P.accentSoft,border:`1px solid ${P.accentBorder}`,
+                        borderRadius:6,padding:"5px 12px",fontSize:12,color:P.accent,
+                        textDecoration:"none",fontFamily:"'DM Mono',monospace",fontWeight:500}
+                    },"⬇ PDF")
+                  :React.createElement("span",{style:{fontSize:12,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},
+                      v.status==="ACCUMULATING"?"In progress":v.status==="PAST_DUE"?"⚠ Overdue":"—"
+                    )
+              )
+            );
+          })
+        )
+      )
+    ),
+
+    /* ── Service Breakdown + Daily Spend ── */
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}},
+      /* Pie */
+      React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+        React.createElement(SHdr,{title:"Service Breakdown",sub:"Current period share"}),
+        ld.services?React.createElement(Sk,{h:200}):
+        er.services?React.createElement(Err,{msg:er.services}):
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:16}},
+          React.createElement(ResponsiveContainer,{width:160,height:200},
+            React.createElement(PieChart,null,
+              React.createElement(Pie,{data:svcs.slice(0,8),cx:"50%",cy:"50%",
+                innerRadius:46,outerRadius:72,paddingAngle:2,dataKey:"value"},
+                svcs.slice(0,8).map((_,i)=>React.createElement(Cell,{key:i,fill:COLORS[i%COLORS.length]}))
+              ),
+              React.createElement(Tooltip,{...TT,formatter:v=>[fmt$(v,P.currency)]})
+            )
+          ),
+          React.createElement("div",{style:{flex:1,minWidth:0}},
+            svcs.slice(0,7).map((s,i)=>
+              React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+                React.createElement("div",{style:{width:8,height:8,borderRadius:2,background:COLORS[i%COLORS.length],flexShrink:0}}),
+                React.createElement("div",{style:{flex:1,fontSize:12,color:"var(--text2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},s.name),
+                React.createElement("div",{style:{fontSize:12,fontFamily:"'DM Mono',monospace",color:"#E2E8F0",fontWeight:500,flexShrink:0}},fmt$(s.value,P.currency))
+              )
+            )
+          )
+        )
+      ),
+      /* Daily */
+      React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+        React.createElement(SHdr,{title:"Daily Spend",sub:"Last 28 days"}),
+        ld.daily?React.createElement(Sk,{h:170}):
+        er.daily?React.createElement(Err,{msg:er.daily}):
+        React.createElement(ResponsiveContainer,{width:"100%",height:170},
+          React.createElement(AreaChart,{data:daily,margin:{top:4,right:8,left:0,bottom:0}},
+            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"var(--grid)"}),
+            React.createElement(XAxis,{dataKey:"day",tick:{fill:"#334155",fontSize:10,fontFamily:"'DM Mono',monospace"},
+              axisLine:false,tickLine:false,
+              tickFormatter:v=>typeof v==="string"&&v.length===10?v.slice(5):v}),
+            React.createElement(YAxis,{tick:{fill:"#334155",fontSize:10,fontFamily:"'DM Mono',monospace"},axisLine:false,tickLine:false,tickFormatter:v=>fmtK(v,P.currency)}),
+            React.createElement(Tooltip,{...TT,formatter:v=>[fmt$(v,P.currency),"Spend"]}),
+            React.createElement(Area,{type:"monotone",dataKey:"cost",stroke:P.accent,fill:P.accent,fillOpacity:0.1,strokeWidth:2})
+          )
+        )
+      )
+    ),
+
+    /* ── KPI row ── */
+    React.createElement("div",{style:{display:"flex",gap:12,marginBottom:14,flexWrap:"wrap"}},
+      [
+        {label:"Total Spend",    value:ld.kpis?null:fmt$(kpis.total_spend,kpis.currency), sub:`${period} · ${kpis.currency||""}`},
+        {label:"Active Services",value:ld.kpis?null:kpis.active_services, sub:"Distinct cloud services"},
+        {label:"Resources",      value:ld.kpis?null:(kpis.active_resources||0), sub:"Unique resource IDs"},
+        {label:"Regions",        value:ld.kpis?null:kpis.regions, sub:P.region},
+      ].map((k,i)=>React.createElement(KpiCard,{key:i,...k,accent:P.accent,card:P.card,loading:ld.kpis}))
+    ),
+
+    /* ── Cost Trend + Top Services Bar ── */
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}},
+      /* Trend */
+      React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+        React.createElement(SHdr,{title:"Cost Trend by Service",sub:"Monthly · last 7 months"}),
+        ld.trend?React.createElement(Sk,{h:200}):
+        er.trend?React.createElement(Err,{msg:er.trend}):
+        React.createElement(ResponsiveContainer,{width:"100%",height:200},
+          React.createElement(AreaChart,{data:trend,margin:{top:4,right:8,left:0,bottom:0}},
+            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"var(--grid)"}),
+            React.createElement(XAxis,{dataKey:"month",tick:{fill:"#334155",fontSize:11,fontFamily:"'DM Mono',monospace"},axisLine:false,tickLine:false}),
+            React.createElement(YAxis,{tick:{fill:"#334155",fontSize:11,fontFamily:"'DM Mono',monospace"},axisLine:false,tickLine:false,tickFormatter:v=>fmtK(v,P.currency)}),
+            React.createElement(Tooltip,{...TT,formatter:(v,n)=>[fmt$(v,P.currency),n]}),
+            trendKeys.map((k,i)=>React.createElement(Area,{key:k,type:"monotone",dataKey:k,stackId:"1",
+              stroke:COLORS[i%COLORS.length],fill:COLORS[i%COLORS.length],fillOpacity:0.14,strokeWidth:1.5}))
+          )
+        )
+      ),
+      /* Bar */
+      React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+        React.createElement(SHdr,{title:"Top Services (Bar)",sub:"Current period sorted by cost"}),
+        ld.services?React.createElement(Sk,{h:170}):
+        er.services?React.createElement(Err,{msg:er.services}):
+        React.createElement(ResponsiveContainer,{width:"100%",height:170},
+          React.createElement(BarChart,{data:svcs.slice(0,8),margin:{top:4,right:8,left:0,bottom:0}},
+            React.createElement(CartesianGrid,{strokeDasharray:"3 3",stroke:"var(--grid)",vertical:false}),
+            React.createElement(XAxis,{dataKey:"name",tick:{fill:"#334155",fontSize:10,fontFamily:"'DM Mono',monospace"},
+              axisLine:false,tickLine:false,
+              tickFormatter:n=>n.length>11?n.slice(0,11)+"…":n}),
+            React.createElement(YAxis,{tick:{fill:"#334155",fontSize:10,fontFamily:"'DM Mono',monospace"},axisLine:false,tickLine:false,tickFormatter:v=>fmtK(v,P.currency)}),
+            React.createElement(Tooltip,{...TT,formatter:v=>[fmt$(v,P.currency)]}),
+            React.createElement(Bar,{dataKey:"value",radius:[4,4,0,0]},
+              svcs.slice(0,8).map((_,i)=>React.createElement(Cell,{key:i,fill:COLORS[i%COLORS.length]}))
+            )
+          )
+        )
+      )
+    ),
+
+    /* ── Resources ── */
+    React.createElement("div",{className:"card",style:{background:"var(--card-bg)"}},
+      React.createElement(SHdr,{title:"Top Spending Resources",sub:"Highest cost this month"}),
+      ld.resources?React.createElement(Sk,{h:220}):
+      er.resources?React.createElement(Err,{msg:er.resources}):
+      React.createElement("table",{className:"dtable"},
+        React.createElement("thead",null,
+          React.createElement("tr",null,
+            ["Resource","Type","Region","Cost"].map(h=>React.createElement("th",{key:h},h))
+          )
+        ),
+        React.createElement("tbody",null,
+          res.map((r,i)=>React.createElement("tr",{key:i},
+            React.createElement("td",null,
+              React.createElement("div",{style:{fontSize:14,fontWeight:600,color:"var(--text2)",marginBottom:3}},r.friendly||r.name||r.id),
+              (r.friendly||r.name)&&r.id!== (r.friendly||r.name)&&
+                React.createElement("div",{style:{fontSize:11,color:"var(--text3)",fontFamily:"'DM Mono',monospace",
+                  maxWidth:380,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},r.id)
+            ),
+            React.createElement("td",null,
+              React.createElement("span",{className:"badge",style:{
+                background:P.accentSoft,border:`1px solid ${P.accentBorder}`,color:P.accent
+              }},r.type.length>22?r.type.slice(0,22)+"…":r.type)
+            ),
+            React.createElement("td",{style:{fontSize:13,color:"var(--text3)",fontFamily:"'DM Mono',monospace"}},fmtRegion(r.region)),
+            React.createElement("td",{style:{fontSize:15,fontWeight:600,fontFamily:"'DM Mono',monospace",color:"var(--text)"}},fmt$(r.cost,P.currency))
+          ))
+        )
+      )
+    ),
+
+    /* ── Combined Invoice (Primary Account only) ── */
+    P.combined_invoice&&React.createElement(CombinedInvoiceSection,{accent:P.accent,accentSoft:P.accentSoft,accentBorder:P.accentBorder})
+  );
+};
+
+/* ══════════════════════════════════════════════════
+   MAIN APP — with reliable setInterval rotation
+══════════════════════════════════════════════════ */
+const App=()=>{
+  const [active,setActive]=useState(ORDER[0]||"");
+  const initTheme=typeof window!=='undefined'?(localStorage.getItem('exa-billing-theme')||'light'):'light';
+  const [themeIcon,setThemeIcon]=useState(initTheme==='dark'?'☀️':'🌙');
+  const [period,setPeriod]=useState("monthly");
+  const [autoRotate,setAutoRotate]=useState(true);
+  const [rotateSecs,setRotateSecs]=useState(300);
+  const rotateSecsRef=useRef(300);
+  const [slide,setSlide]=useState("on");
+  const [progress,setProgress]=useState(0);
+
+  const autoRotateRef=useRef(true);
+  const intervalRef=useRef(null);
+  const progressRef=useRef(null);
+  const progressVal=useRef(0);
+  const activeRef=useRef(ORDER[0]||"");
+
+  // Keep refs in sync
+  useEffect(()=>{autoRotateRef.current=autoRotate;},[autoRotate]);
+  useEffect(()=>{rotateSecsRef.current=rotateSecs;},[rotateSecs]);
+  useEffect(()=>{activeRef.current=active;},[active]);
+
+  const doSwitch=useCallback((to)=>{
+    if(to===activeRef.current)return;
+    setSlide("out");
+    setTimeout(()=>{
+      setActive(to);
+      setSlide("in");
+      setTimeout(()=>setSlide("on"),60);
+    },420);
+  },[]);
+
+  const manualSwitch=useCallback((to)=>{
+    setAutoRotate(false);
+    autoRotateRef.current=false;
+    // Stop timers
+    if(intervalRef.current) clearInterval(intervalRef.current);
+    if(progressRef.current) clearInterval(progressRef.current);
+    // Update progress bar to static
+    const bar=document.getElementById("progress-bar");
+    if(bar){bar.style.transition="none";bar.style.width="0%";}
+    doSwitch(to);
+  },[doSwitch]);
+
+  const startRotation=useCallback(()=>{
+    // Clear any existing
+    if(intervalRef.current)  clearInterval(intervalRef.current);
+    if(progressRef.current)  clearInterval(progressRef.current);
+
+    const P=PROVIDERS[activeRef.current];
+    const bar=document.getElementById("progress-bar");
+    if(bar){
+      bar.style.background=P.accent;
+      bar.style.transition="none";
+      bar.style.width="0%";
+    }
+
+    progressVal.current=0;
+    const TICK=50;
+    const ROTATE_MS_DYN=rotateSecsRef.current*1000;
+    const STEPS=ROTATE_MS_DYN/TICK;
+
+    progressRef.current=setInterval(()=>{
+      progressVal.current+=1;
+      const pct=(progressVal.current/STEPS)*100;
+      if(bar){
+        bar.style.transition=`width ${TICK}ms linear`;
+        bar.style.width=pct+"%";
+      }
+      if(progressVal.current>=STEPS){
+        clearInterval(progressRef.current);
+      }
+    },TICK);
+
+    intervalRef.current=setTimeout(()=>{
+      if(!autoRotateRef.current)return;
+      const idx=ORDER.indexOf(activeRef.current);
+      const next=ORDER[(idx+1)%ORDER.length];
+      doSwitch(next);
+      // restart after switch completes
+      setTimeout(()=>{
+        if(autoRotateRef.current) startRotation();
+      },500);
+    },rotateSecsRef.current*1000);
+  },[doSwitch]);
+
+  // Start rotation on mount
+  useEffect(()=>{
+    startRotation();
+    return()=>{
+      clearInterval(intervalRef.current);
+      clearInterval(progressRef.current);
+    };
+  },[]);
+
+  // When active changes (from auto-rotate), update bar color
+  useEffect(()=>{
+    const P=PROVIDERS[active];
+    const bar=document.getElementById("progress-bar");
+    if(bar) bar.style.background=P.accent;
+  },[active]);
+
+  const handleRotateSecsChange=(secs)=>{
+    setRotateSecs(secs);
+    rotateSecsRef.current=secs;
+    if(autoRotateRef.current){
+      clearInterval(intervalRef.current);
+      clearInterval(progressRef.current);
+      setTimeout(()=>startRotation(),100);
+    }
+  };
+  const toggleAutoRotate=()=>{
+    const next=!autoRotate;
+    setAutoRotate(next);
+    autoRotateRef.current=next;
+    if(next){
+      startRotation();
+    } else {
+      clearInterval(intervalRef.current);
+      clearInterval(progressRef.current);
+      const bar=document.getElementById("progress-bar");
+      if(bar){bar.style.transition="none";bar.style.width="0%";}
+    }
+  };
+
+  const P=PROVIDERS[active];
+
+  return React.createElement("div",{style:{minHeight:"100vh",background:"var(--page-bg)",transition:"background 0.5s ease"}},
+
+    /* ── Top nav ── */
+    React.createElement("div",{style:{
+      position:"sticky",top:0,zIndex:100,
+      background:"var(--nav-bg)",
+      backdropFilter:"blur(24px)",
+      borderBottom:`1px solid var(--border)`,
+    }},
+      React.createElement("div",{style:{
+        display:"flex",alignItems:"center",height:56,gap:12,
+        padding:"0 20px",maxWidth:1600,margin:"0 auto"
+      }},
+
+        /* Logo */
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginRight:6,flexShrink:0}},
+          React.createElement("div",{style:{
+            width:32,height:32,borderRadius:8,
+            background:P.accentSoft,border:`1px solid ${P.accentBorder}`,
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,
+          }},P.logo),
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"var(--text)",letterSpacing:"-0.3px"}},P.name),
+            React.createElement("div",{style:{fontSize:10,color:"var(--text3)",fontFamily:"'DM Mono',monospace",letterSpacing:1.5,marginTop:1}},"BILLING MONITOR")
+          )
+        ),
+
+        /* Provider tabs */
+        React.createElement("div",{style:{display:"flex",gap:3,background:"var(--card-bg2)",borderRadius:8,padding:3}},
+          ORDER.map(pid=>{
+            const pv=PROVIDERS[pid];
+            const isA=pid===active;
+            return React.createElement("button",{key:pid,className:"navbtn",
+              onClick:()=>manualSwitch(pid),
+              style:{
+                background:isA?pv.accentSoft:"transparent",
+                color:isA?pv.accent:"#475569",
+                border:isA?`1px solid ${pv.accentBorder}`:"1px solid transparent",
+              }},pv.name);
+          })
+        ),
+
+        /* Period */
+        React.createElement("div",{style:{display:"flex",gap:3,background:"var(--card-bg2)",borderRadius:8,padding:3,marginLeft:"auto"}},
+          ["daily","monthly","quarterly","ytd"].map(p=>
+            React.createElement("button",{key:p,className:"periodbtn",
+              onClick:()=>setPeriod(p),
+              style:{
+                background:period===p?P.accentSoft:"transparent",
+                color:period===p?P.accent:"#475569",
+                border:period===p?`1px solid ${P.accentBorder}`:"1px solid transparent",
+              }},p)
+          )
+        ),
+
+        /* Auto-rotate toggle */
+        React.createElement("button",{
+          onClick:toggleAutoRotate,
+          title:autoRotate?"Pause auto-rotate":"Resume auto-rotate",
+          style:{
+            display:"flex",alignItems:"center",gap:6,
+            padding:"5px 12px",borderRadius:7,
+            border:`1px solid var(--border)`,
+            background:autoRotate?P.accentSoft:"rgba(255,255,255,0.04)",
+            cursor:"pointer",color:autoRotate?P.accent:"#475569",
+            fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:500,
+            transition:"all 0.2s"
+          }
+        },
+          React.createElement("span",null,autoRotate?"⏸":"▶"),
+          React.createElement("span",null,autoRotate?"Auto":"Manual")
+        ),
+
+        /* Rotation speed */
+        React.createElement("select",{
+          value:rotateSecs,
+          onChange:e=>handleRotateSecsChange(Number(e.target.value)),
+          title:"Auto-rotate interval",
+          style:{height:32,borderRadius:8,border:"1px solid var(--border)",
+            background:"var(--card-bg2)",cursor:"pointer",color:"var(--text2)",
+            fontSize:12,padding:"0 8px",fontFamily:"'DM Mono',monospace",
+            flexShrink:0,outline:"none"}
+        },
+          React.createElement("option",{value:60},"1 min"),
+          React.createElement("option",{value:120},"2 min"),
+          React.createElement("option",{value:300},"5 min"),
+          React.createElement("option",{value:600},"10 min"),
+          React.createElement("option",{value:1800},"30 min")
+        ),
+
+        /* Theme toggle */
+        React.createElement("button",{
+          onClick:()=>{
+            const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+            document.documentElement.setAttribute('data-theme',t);
+            localStorage.setItem('exa-billing-theme',t);
+            setThemeIcon(t==='dark'?'☀️':'🌙');
+          },
+          title:"Toggle theme",
+          style:{width:32,height:32,borderRadius:8,border:`1px solid var(--border)`,
+            background:"var(--card-bg2)",cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:15,flexShrink:0,transition:"all 0.2s"}
+        }, themeIcon),
+
+        /* Live */
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexShrink:0}},
+          React.createElement("div",{className:"livepulse",style:{width:6,height:6,borderRadius:"50%",background:"#34D399"}}),
+        ),
+
+        /* Admin */
+        React.createElement("a",{href:"/admin",style:{
+          fontSize:12,color:"var(--text2)",textDecoration:"none",
+          fontFamily:"'DM Mono',monospace",flexShrink:0,
+          padding:"4px 10px",borderRadius:6,border:"1px solid var(--border)"
+        }},"admin"),
+
+        /* Logout */
+        React.createElement("a",{href:"/logout",style:{
+          fontSize:12,color:"#334155",textDecoration:"none",
+          fontFamily:"'DM Mono',monospace",flexShrink:0,
+          padding:"4px 10px",borderRadius:6,
+          border:"1px solid var(--border)",
+          transition:"color 0.2s"
+        }},"logout"),
+      )
+    ),
+
+    /* ── Content ── */
+    React.createElement("div",{
+      className:`pview ${slide}`,
+      style:{padding:"18px 20px",maxWidth:1600,margin:"0 auto"}
+    },
+      React.createElement(Dashboard,{key:active,provider:active,period})
+    ),
+  );
+};
+
+ReactDOM.render(React.createElement(App),document.getElementById("root"));
+</script>
+</body>
+</html>

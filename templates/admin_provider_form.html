@@ -1,0 +1,30 @@
+{% extends "admin_base.html" %}
+{% block title %}{{ 'Edit' if provider else 'Add' }} Dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ 'Edit dashboard' if provider else 'Add dashboard' }}</h1>
+  <div class="muted">AWS credentials are encrypted before being stored. External Portal and Hetzner receive sanitized billing data from their collectors.</div>
+  <form method="post" style="margin-top:20px">
+    <input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}">
+    <div class="grid two">
+      <div><label>Dashboard name</label><input name="name" required value="{{ request.form.get('name', provider.name if provider else '') }}"></div>
+      <div><label>Slug / Telegram command</label><input name="slug" required pattern="[a-z][a-z0-9-]{1,39}" value="{{ request.form.get('slug', provider.slug if provider else '') }}"><div class="help">Example: secondary. Telegram command becomes /secondary.</div></div>
+      <div><label>Provider type</label><select name="provider_type" id="provider_type" onchange="toggleProviderFields()">{% set selected_type=request.form.get('provider_type', provider.provider_type if provider else 'aws') %}<option value="aws" {{ 'selected' if selected_type=='aws' }}>AWS Account</option><option value="oci_tenant" {{ 'selected' if selected_type=='oci_tenant' }}>OCI Tenant</option><option value="portal" {{ 'selected' if selected_type=='portal' }}>External Portal</option><option value="hetzner" {{ 'selected' if selected_type=='hetzner' }}>Hetzner Accounts</option></select></div>
+      <div><label>Display order</label><input type="number" name="display_order" value="{{ request.form.get('display_order', provider.display_order if provider else 100) }}"></div>
+      <div><label>Icon / emoji</label><input name="icon" value="{{ request.form.get('icon', provider.icon if provider else '☁') }}"></div>
+      <div><label>Accent color</label><input type="color" name="accent" value="{{ request.form.get('accent', provider.accent if provider else '#3B82F6') }}"></div>
+      <div><label>Currency</label><input name="currency" maxlength="3" value="{{ request.form.get('currency', provider.currency if provider else 'USD') }}"></div>
+      <div><label>Region</label><input name="region" value="{{ request.form.get('region', provider.region if provider else 'us-east-1') }}"></div>
+    </div>
+    <div id="aws_fields" class="card" style="margin-top:18px;background:var(--panel2)"><h2>AWS credentials</h2><div class="grid two"><div><label>Access key ID</label><input name="access_key_id" autocomplete="off"><div class="help">{% if provider %}Leave blank to keep the saved key.{% else %}Required for a new AWS dashboard.{% endif %}</div></div><div><label>Secret access key</label><input type="password" name="secret_access_key" autocomplete="new-password"><div class="help">Never displayed again after saving.</div></div></div></div>
+    <div id="oci_fields" class="card" style="margin-top:18px;background:var(--panel2)"><h2>OCI tenant filter</h2><label>tenantName value</label><input name="tenant_name" value="{{ request.form.get('tenant_name', provider.config.tenant_name if provider and provider.config else '') }}"><div class="help">This must match the tenantName returned by OCI Usage API.</div></div>
+    <div id="portal_fields" class="card" style="margin-top:18px;background:var(--panel2)"><h2>External Portal settings</h2><label>Low-credit alert threshold</label><input type="number" step="0.01" name="low_credit_threshold" value="{{ request.form.get('low_credit_threshold', provider.config.low_credit_threshold if provider and provider.config else 1000) }}"></div>
+    <div id="hetzner_fields" class="card" style="margin-top:18px;background:var(--panel2)"><h2>Hetzner collector</h2><div class="help">No Hetzner username, password, OTP, or browser cookies are stored on this server. The fixed-IP collector sends only invoice number, date, amount, currency, and status.</div></div>
+    <div class="card" style="margin-top:18px;background:var(--panel2)"><div class="row"><input type="checkbox" id="enabled" name="enabled" value="1" {{ 'checked' if request.form.get('enabled')=='1' or (not request.form and (not provider or provider.enabled)) }}><label for="enabled" style="margin:0">Show dashboard</label></div><div class="row" style="margin-top:12px"><input type="checkbox" id="telegram_enabled" name="telegram_enabled" value="1" {{ 'checked' if request.form.get('telegram_enabled')=='1' or (not request.form and (not provider or provider.telegram_enabled)) }}><label for="telegram_enabled" style="margin:0">Include in Telegram reporting and commands</label></div></div>
+    <div class="actions"><button class="btn primary" type="submit">Save dashboard</button><a class="btn" href="{{ url_for('admin.index') }}">Cancel</a></div>
+  </form>
+</div>
+<script>
+function toggleProviderFields(){const t=document.getElementById('provider_type').value;document.getElementById('aws_fields').style.display=t==='aws'?'block':'none';document.getElementById('oci_fields').style.display=t==='oci_tenant'?'block':'none';document.getElementById('portal_fields').style.display=t==='portal'?'block':'none';document.getElementById('hetzner_fields').style.display=t==='hetzner'?'block':'none';}toggleProviderFields();
+</script>
+{% endblock %}

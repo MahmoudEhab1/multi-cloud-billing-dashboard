@@ -1,0 +1,43 @@
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Runtime data
+data/
+*.db
+*.sqlite
+*.sqlite3
+cache.json
+cache.json.lock
+*_cache.json
+*.log
+logs/
+tmp/
+
+# Browser/session data
+*browser-profile*/
+.hetzner-browser-profile/
+cookies*
+storage_state*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Archives/backups
+backups/
+private-backups/
+*.tar.gz
+*.zip
+
+# Editors/OS
+.DS_Store
+.idea/
+.vscode/

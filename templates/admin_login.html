@@ -1,0 +1,14 @@
+{% extends "admin_base.html" %}
+{% block title %}Admin Login{% endblock %}
+{% block content %}
+<div class="card" style="max-width:440px;margin:8vh auto">
+  <h1>Admin Login</h1>
+  <p class="muted">Manage dashboards, credentials, order, cache, and Telegram reporting.</p>
+  <form method="post" style="margin-top:22px">
+    <input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}">
+    <label>Password</label>
+    <input type="password" name="password" required autofocus autocomplete="current-password">
+    <button class="btn primary" style="width:100%;margin-top:14px" type="submit">Sign in</button>
+  </form>
+</div>
+{% endblock %}

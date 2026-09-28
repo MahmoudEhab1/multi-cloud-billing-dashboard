@@ -1,0 +1,43 @@
+{% extends "admin_base.html" %}
+{% block title %}Provider Management{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="section-title">
+    <div><h1>Dashboard Providers</h1><div class="muted">Add, edit, disable, reorder, test, clear cache, or remove dashboards without editing code.</div></div>
+    <a class="btn primary" href="{{ url_for('admin.provider_new') }}">＋ Add dashboard</a>
+  </div>
+  {% if using_fallback_password %}<div class="flash error">The admin panel is currently using the normal dashboard password. Set a separate admin password from “Admin Password”.</div>{% endif %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th>Order</th><th>Dashboard</th><th>Type</th><th>Region</th><th>Enabled</th><th>Telegram</th><th>Last test</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for p in providers %}
+        <tr>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_move', provider_id=p.id, direction='up') }}"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn" title="Move up">↑</button></form>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_move', provider_id=p.id, direction='down') }}"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn" title="Move down">↓</button></form>
+            <span class="muted">{{ p.display_order }}</span>
+          </td>
+          <td><div class="provider-name"><div class="icon" style="border:1px solid {{ p.accent }}55">{{ p.icon }}</div><div><strong>{{ p.name }}</strong><div class="muted">/{{ p.slug }}</div></div></div></td>
+          <td>{{ p.provider_type }}</td>
+          <td>{{ p.region or '—' }}<div class="muted">{{ p.currency }}</div></td>
+          <td><span class="badge {{ 'on' if p.enabled else 'off' }}">{{ 'Enabled' if p.enabled else 'Disabled' }}</span></td>
+          <td><span class="badge {{ 'on' if p.telegram_enabled else 'off' }}">{{ 'On' if p.telegram_enabled else 'Off' }}</span></td>
+          <td>
+            {% if p.last_test_at %}<span class="badge {{ 'on' if p.last_test_ok else 'err' }}">{{ 'OK' if p.last_test_ok else 'Failed' }}</span><div class="muted">{{ p.last_test_at }}</div>{% else %}<span class="muted">Not tested</span>{% endif %}
+          </td>
+          <td><div class="actions">
+            <a class="btn" href="{{ url_for('admin.provider_edit', provider_id=p.id) }}">Edit</a>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_test', provider_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn good">Test</button></form>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_clear_cache', provider_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn warn">Clear cache</button></form>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_toggle', provider_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn">{{ 'Disable' if p.enabled else 'Enable' }}</button></form>
+            <form class="inline" method="post" action="{{ url_for('admin.provider_delete', provider_id=p.id) }}" onsubmit="return confirm('Remove this dashboard? Credentials and history remain in the database backup but it will disappear from the panel.');"><input type="hidden" name="csrf_token" value="{{ admin_csrf_token() }}"><button class="btn danger">Remove</button></form>
+          </div></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="card"><h2>Recent admin activity</h2><div class="tablewrap"><table class="table" style="min-width:700px"><thead><tr><th>Time</th><th>Action</th><th>Provider</th><th>Details</th><th>IP</th></tr></thead><tbody>{% for a in audit_rows %}<tr><td>{{ a.created_at }}</td><td>{{ a.action }}</td><td>{{ a.provider_name or '—' }}</td><td>{{ a.details or '—' }}</td><td>{{ a.remote_addr or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No activity yet.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
